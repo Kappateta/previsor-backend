@@ -17,13 +17,26 @@ HEADERS = {
 }
 
 TIME_IDS = {
-    "Flamengo": 5981, "Palmeiras": 1963, "Atletico-MG": 1977,
-    "Gremio": 5926, "Corinthians": 1957, "Sao Paulo": 1981,
-    "Internacional": 1966, "Fluminense": 1961, "Santos": 1968,
-    "Botafogo": 1958, "Cruzeiro": 1954, "Atletico-PR": 1967,
-    "Vasco": 1974, "Bahia": 1955, "Fortaleza": 2020,
-    "Ceara": 2001, "Sport": 1959, "Goias": 1960,
-    "Coritiba": 1982, "America-MG": 1973
+    "Flamengo": 5981,
+    "Palmeiras": 1963,
+    "Atletico-MG": 1977,
+    "Botafogo": 1958,
+    "Corinthians": 1957,
+    "Sao Paulo": 1981,
+    "Internacional": 1966,
+    "Fluminense": 1961,
+    "Santos": 1968,
+    "Cruzeiro": 1954,
+    "Vasco": 1974,
+    "Bahia": 1955,
+    "Gremio": 5926,
+    "RB Bragantino": 2248,
+    "Mirassol": 7900,
+    "Atletico-PR": 1967,
+    "Chapecoense": 133,
+    "Remo": 4829,
+    "Coritiba": 1982,
+    "Santos": 1968
 }
 
 # Carregar modelos e colunas
@@ -176,4 +189,3 @@ def prever():
 
 if __name__ == "__main__":
     app.run(debug=True)
-    
