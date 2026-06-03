@@ -2,3 +2,7 @@ flask
 flask-cors
 requests
 gunicorn
+joblib
+numpy
+scikit-learn
+xgboost
