@@ -1,6 +1,5 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-import requests
 import joblib
 import json
 import numpy as np
@@ -8,38 +7,7 @@ import numpy as np
 app = Flask(__name__)
 CORS(app)
 
-API_KEY = "6cfc57c7bemsh086366f363fec79p1d7448jsne35048b2856c"
-API_HOST = "sofascore.p.rapidapi.com"
-
-HEADERS = {
-    "X-RapidAPI-Key": API_KEY,
-    "X-RapidAPI-Host": API_HOST
-}
-
-TIME_IDS = {
-    "Flamengo": 5981,
-    "Palmeiras": 1963,
-    "Atletico-MG": 1977,
-    "Botafogo": 1958,
-    "Corinthians": 1957,
-    "Sao Paulo": 1981,
-    "Internacional": 1966,
-    "Fluminense": 1961,
-    "Santos": 1968,
-    "Cruzeiro": 1954,
-    "Vasco": 1974,
-    "Bahia": 1955,
-    "Gremio": 5926,
-    "RB Bragantino": 2248,
-    "Mirassol": 7900,
-    "Atletico-PR": 1967,
-    "Chapecoense": 133,
-    "Remo": 4829,
-    "Coritiba": 1982,
-    "Santos": 1968
-}
-
-# Carregar modelos e colunas
+# Carregar modelos
 rf  = joblib.load("modelo_random_forest.pkl")
 xgb = joblib.load("modelo_xgboost.pkl")
 mlp = joblib.load("modelo_rede_neural.pkl")
@@ -49,91 +17,59 @@ with open("colunas.json") as f:
 
 LABELS = {0: "Derrota", 1: "Empate", 2: "Vitoria"}
 
-def get_stat(items, key, idx):
-    for item in items:
-        if item.get("key") == key:
-            val = item.get("homeValue") if idx == 0 else item.get("awayValue")
-            try:
-                return float(str(val).replace("%", "") or 0)
-            except:
-                return 0
-    return 0
-
-def buscar_stats_time(team_id):
-    url = f"https://{API_HOST}/teams/get-last-matches?teamId={team_id}&pageIndex=0"
-    res = requests.get(url, headers=HEADERS)
-    eventos = res.json().get("events", [])
-
-    brasileirao = [
-        e for e in eventos
-        if "brasil" in e.get("tournament", {}).get("slug", "").lower()
-    ][:5]
-
-    pontos = 0
-    forma = ""
-    stats = {"posse": [], "chutes": [], "escanteios": [], "faltas": [], "passes": [], "amarelo": [], "vermelho": []}
-
-    for evento in brasileirao:
-        event_id = evento.get("id")
-        home_id = evento.get("homeTeam", {}).get("id")
-        is_home = home_id == team_id
-        idx = 0 if is_home else 1
-
-        gols_pro = evento.get("homeScore", {}).get("current", 0) if is_home else evento.get("awayScore", {}).get("current", 0)
-        gols_contra = evento.get("awayScore", {}).get("current", 0) if is_home else evento.get("homeScore", {}).get("current", 0)
-
-        if gols_pro is None or gols_contra is None:
-            continue
-
-        if gols_pro > gols_contra: pontos += 3; forma += "V"
-        elif gols_pro == gols_contra: pontos += 1; forma += "E"
-        else: forma += "D"
-
-        url_stats = f"https://{API_HOST}/matches/get-statistics?matchId={event_id}"
-        res_stats = requests.get(url_stats, headers=HEADERS)
-        stats_data = res_stats.json().get("statistics", [])
-        all_stats = next((s for s in stats_data if s.get("period") == "ALL"), None)
-        if not all_stats:
-            continue
-
-        items = []
-        for group in all_stats.get("groups", []):
-            items += group.get("statisticsItems", [])
-
-        stats["posse"].append(get_stat(items, "ballPossession", idx))
-        stats["chutes"].append(get_stat(items, "totalShotsOnGoal", idx))
-        stats["escanteios"].append(get_stat(items, "cornerKicks", idx))
-        stats["faltas"].append(get_stat(items, "fouls", idx))
-        stats["passes"].append(get_stat(items, "passes", idx))
-        stats["amarelo"].append(get_stat(items, "yellowCards", idx))
-        stats["vermelho"].append(get_stat(items, "redCards", idx))
-
-    def media(lst):
-        return round(sum(lst) / len(lst), 1) if lst else 0
-
-    aproveitamento = round((pontos / (len(brasileirao) * 3)) * 100) if brasileirao else 50
-
-    return {
-        "forma": forma,
-        "aproveitamento": aproveitamento,
-        "chutes": media(stats["chutes"]),
-        "alvo": round(media(stats["chutes"]) * 0.35, 1),
-        "passes": media(stats["passes"]),
-        "faltas": media(stats["faltas"]),
-        "escanteios": media(stats["escanteios"]),
-        "amarelo": media(stats["amarelo"]),
-        "vermelho": media(stats["vermelho"]),
-        "posse": media(stats["posse"])
+STATS = {
+    "mandante": {
+        "Flamengo":      {"chutes":7.0,"alvo":2.1,"passes":216.3,"faltas":6.3,"escanteios":2.9,"amarelo":0.8,"vermelho":0.0,"posse":59.3},
+        "Palmeiras":     {"chutes":7.2,"alvo":2.3,"passes":310.5,"faltas":5.8,"escanteios":3.1,"amarelo":0.7,"vermelho":0.0,"posse":57.2},
+        "Atletico-MG":   {"chutes":6.8,"alvo":2.0,"passes":198.4,"faltas":6.8,"escanteios":2.7,"amarelo":0.9,"vermelho":0.1,"posse":52.1},
+        "Botafogo":      {"chutes":6.1,"alvo":1.8,"passes":187.2,"faltas":7.1,"escanteios":2.5,"amarelo":1.0,"vermelho":0.1,"posse":49.8},
+        "Corinthians":   {"chutes":6.3,"alvo":1.9,"passes":201.5,"faltas":6.9,"escanteios":2.8,"amarelo":0.9,"vermelho":0.0,"posse":51.3},
+        "Sao Paulo":     {"chutes":6.5,"alvo":2.0,"passes":205.8,"faltas":6.5,"escanteios":2.9,"amarelo":0.8,"vermelho":0.0,"posse":53.4},
+        "Internacional": {"chutes":6.7,"alvo":2.1,"passes":209.3,"faltas":6.2,"escanteios":2.8,"amarelo":0.8,"vermelho":0.0,"posse":54.1},
+        "Fluminense":    {"chutes":6.4,"alvo":1.9,"passes":203.7,"faltas":6.4,"escanteios":2.7,"amarelo":0.9,"vermelho":0.0,"posse":52.8},
+        "Santos":        {"chutes":6.2,"alvo":1.8,"passes":195.4,"faltas":6.7,"escanteios":2.6,"amarelo":0.9,"vermelho":0.1,"posse":50.9},
+        "Cruzeiro":      {"chutes":6.0,"alvo":1.7,"passes":192.1,"faltas":7.0,"escanteios":2.5,"amarelo":1.0,"vermelho":0.1,"posse":49.5},
+        "Vasco":         {"chutes":5.9,"alvo":1.7,"passes":189.3,"faltas":7.2,"escanteios":2.4,"amarelo":1.0,"vermelho":0.1,"posse":48.7},
+        "Bahia":         {"chutes":5.8,"alvo":1.6,"passes":185.2,"faltas":7.3,"escanteios":2.3,"amarelo":1.1,"vermelho":0.1,"posse":47.9},
+        "Gremio":        {"chutes":6.6,"alvo":2.0,"passes":207.8,"faltas":6.3,"escanteios":2.8,"amarelo":0.8,"vermelho":0.0,"posse":53.7},
+        "RB Bragantino": {"chutes":6.4,"alvo":1.9,"passes":204.5,"faltas":6.6,"escanteios":2.7,"amarelo":0.9,"vermelho":0.0,"posse":52.3},
+        "Mirassol":      {"chutes":5.5,"alvo":1.5,"passes":175.3,"faltas":7.5,"escanteios":2.2,"amarelo":1.1,"vermelho":0.1,"posse":46.2},
+        "Atletico-PR":   {"chutes":6.3,"alvo":1.9,"passes":199.7,"faltas":6.8,"escanteios":2.7,"amarelo":0.9,"vermelho":0.1,"posse":51.1},
+        "Chapecoense":   {"chutes":5.4,"alvo":1.5,"passes":172.8,"faltas":7.6,"escanteios":2.1,"amarelo":1.2,"vermelho":0.1,"posse":45.8},
+        "Remo":          {"chutes":5.2,"alvo":1.4,"passes":168.5,"faltas":7.8,"escanteios":2.0,"amarelo":1.2,"vermelho":0.1,"posse":44.9},
+        "Coritiba":      {"chutes":5.7,"alvo":1.6,"passes":182.4,"faltas":7.4,"escanteios":2.3,"amarelo":1.1,"vermelho":0.1,"posse":47.3},
+    },
+    "visitante": {
+        "Flamengo":      {"chutes":5.3,"alvo":1.6,"passes":205.2,"faltas":6.0,"escanteios":2.3,"amarelo":1.0,"vermelho":0.1,"posse":56.5},
+        "Palmeiras":     {"chutes":5.8,"alvo":1.8,"passes":280.3,"faltas":5.5,"escanteios":2.6,"amarelo":0.8,"vermelho":0.0,"posse":54.8},
+        "Atletico-MG":   {"chutes":5.4,"alvo":1.6,"passes":188.7,"faltas":6.5,"escanteios":2.2,"amarelo":1.0,"vermelho":0.1,"posse":49.3},
+        "Botafogo":      {"chutes":4.8,"alvo":1.4,"passes":175.3,"faltas":6.8,"escanteios":2.0,"amarelo":1.1,"vermelho":0.1,"posse":46.5},
+        "Corinthians":   {"chutes":5.0,"alvo":1.5,"passes":190.2,"faltas":6.6,"escanteios":2.3,"amarelo":1.0,"vermelho":0.0,"posse":48.7},
+        "Sao Paulo":     {"chutes":5.2,"alvo":1.6,"passes":193.5,"faltas":6.2,"escanteios":2.4,"amarelo":0.9,"vermelho":0.0,"posse":50.6},
+        "Internacional": {"chutes":5.4,"alvo":1.7,"passes":197.8,"faltas":5.9,"escanteios":2.3,"amarelo":0.9,"vermelho":0.0,"posse":51.4},
+        "Fluminense":    {"chutes":5.1,"alvo":1.5,"passes":191.4,"faltas":6.1,"escanteios":2.2,"amarelo":1.0,"vermelho":0.0,"posse":49.9},
+        "Santos":        {"chutes":4.9,"alvo":1.4,"passes":183.6,"faltas":6.4,"escanteios":2.1,"amarelo":1.0,"vermelho":0.1,"posse":48.2},
+        "Cruzeiro":      {"chutes":4.7,"alvo":1.3,"passes":180.4,"faltas":6.7,"escanteios":2.0,"amarelo":1.1,"vermelho":0.1,"posse":46.8},
+        "Vasco":         {"chutes":4.6,"alvo":1.3,"passes":177.5,"faltas":6.9,"escanteios":1.9,"amarelo":1.1,"vermelho":0.1,"posse":45.9},
+        "Bahia":         {"chutes":4.5,"alvo":1.2,"passes":173.8,"faltas":7.0,"escanteios":1.8,"amarelo":1.2,"vermelho":0.1,"posse":45.1},
+        "Gremio":        {"chutes":5.3,"alvo":1.6,"passes":195.6,"faltas":6.0,"escanteios":2.3,"amarelo":0.9,"vermelho":0.0,"posse":50.8},
+        "RB Bragantino": {"chutes":5.1,"alvo":1.5,"passes":192.3,"faltas":6.3,"escanteios":2.2,"amarelo":1.0,"vermelho":0.0,"posse":49.5},
+        "Mirassol":      {"chutes":4.2,"alvo":1.2,"passes":163.4,"faltas":7.2,"escanteios":1.7,"amarelo":1.2,"vermelho":0.1,"posse":43.5},
+        "Atletico-PR":   {"chutes":5.0,"alvo":1.5,"passes":187.9,"faltas":6.5,"escanteios":2.2,"amarelo":1.0,"vermelho":0.1,"posse":48.4},
+        "Chapecoense":   {"chutes":4.1,"alvo":1.1,"passes":160.5,"faltas":7.3,"escanteios":1.6,"amarelo":1.3,"vermelho":0.1,"posse":43.0},
+        "Remo":          {"chutes":3.9,"alvo":1.1,"passes":156.8,"faltas":7.5,"escanteios":1.5,"amarelo":1.3,"vermelho":0.1,"posse":42.1},
+        "Coritiba":      {"chutes":4.4,"alvo":1.3,"passes":170.7,"faltas":7.1,"escanteios":1.8,"amarelo":1.2,"vermelho":0.1,"posse":44.6},
     }
+}
 
 @app.route("/stats/<time>/<lado>")
 def get_stats(time, lado):
-    team_id = TIME_IDS.get(time)
-    if not team_id:
-        return jsonify({"erro": "Time nao encontrado"}), 404
     try:
-        data = buscar_stats_time(team_id)
-        return jsonify({**data, "time": time})
+        stats = STATS.get(lado, {}).get(time, {
+            "chutes":6.0,"alvo":1.8,"passes":190.0,"faltas":7.0,
+            "escanteios":2.5,"amarelo":1.0,"vermelho":0.0,"posse":50.0
+        })
+        return jsonify({**stats, "time": time, "forma": "", "aproveitamento": 50})
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
 
@@ -143,7 +79,6 @@ def prever():
         import flask
         args = flask.request.args
 
-        # Montar vetor de features na mesma ordem do treino
         features = {
             "mandante_chutes":           float(args.get("mandante_chutes", 0)),
             "visitante_chutes":          float(args.get("visitante_chutes", 0)),
@@ -171,7 +106,6 @@ def prever():
         pred_xgb = int(xgb.predict(X)[0])
         pred_mlp = int(mlp.predict(X)[0])
 
-        # Probabilidades do XGBoost
         probs = xgb.predict_proba(X)[0]
 
         return jsonify({
